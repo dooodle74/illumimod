@@ -1,5 +1,5 @@
 # masks.py (3.8/3.9-friendly)
-from typing import Tuple
+from typing import Tuple, Optional, Sequence
 import numpy as np
 import numpy.typing as npt
 
@@ -74,3 +74,50 @@ def light_to_mask(
         I = (1.0 - t) * I0 + t * I
 
     return I.astype(dtype, copy=False)
+
+def add_masks(
+    masks: Sequence[npt.NDArray],
+    weights: Optional[Sequence[float]] = None,
+    dtype = np.float32,
+) -> npt.NDArray:
+    """
+    Purely additive combination of a list of (H,W) masks.
+
+    Parameters
+    ----------
+    masks : sequence of ndarray
+        Each mask must be shape-compatible (same H,W). None entries are ignored.
+    weights : sequence of float or None
+        Optional per-mask weights (same length as masks). Default = 1.0 for all.
+    dtype : numpy dtype
+        Output dtype (and accumulation dtype). Default float32.
+
+    Returns
+    -------
+    ndarray (H,W)
+        Sum_i weights[i] * masks[i], no clipping or normalization.
+    """
+    # filter out Nones
+    ms = [m for m in masks if m is not None]
+    if not ms:
+        raise ValueError("combine_masks: no masks provided")
+
+    h, w = ms[0].shape[:2]
+    for m in ms:
+        if m.shape[:2] != (h, w):
+            raise ValueError("combine_masks: all masks must have the same HxW")
+
+    out = np.zeros((h, w), dtype=dtype)
+
+    if weights is None:
+        for m in ms:
+            out += m.astype(dtype, copy=False)
+    else:
+        if len(weights) != len(masks):
+            raise ValueError("combine_masks: weights length must match masks length")
+        for m, w in zip(masks, weights):
+            if m is None:
+                continue
+            out += float(w) * m.astype(dtype, copy=False)
+
+    return out
