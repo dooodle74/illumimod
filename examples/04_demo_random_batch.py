@@ -33,6 +33,7 @@ img = np.array(Image.open(PATH_IN).convert("RGB"))
 for i in range(100, 200):
     num_lights = random.randint(LIGHTS_MIN, LIGHTS_MAX)
     scale = math.sqrt(num_lights)
+
     lights = []
     for light in range(num_lights):
         x = sample_point(mean=SAMPLE_MEAN, std=SAMPLE_STD, length=500)

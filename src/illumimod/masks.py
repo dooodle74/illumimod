@@ -75,6 +75,47 @@ def light_to_mask(
 
     return I.astype(dtype, copy=False)
 
+def scale_mask(
+    mask: npt.NDArray,
+    low: float,
+    high: float,
+    low_percentile: float = 1.0,
+    high_percentile: float = 99.0,
+    *,
+    clip: bool = True,
+    dtype = np.float32,
+    eps: float = 1e-6,
+) -> npt.NDArray:
+    """
+    Linearly scale a mask so that:
+      P_low(mask)  -> low
+      P_high(mask) -> high
+    Everything below/above is optionally clipped.
+
+    Example: scale_mask(L, 0.0, 1.0)  # robust normalize to [0,1]
+    """
+    m = mask.astype(np.float32, copy=False)
+
+    p_lo = float(np.percentile(m, float(low_percentile)))
+    p_hi = float(np.percentile(m, float(high_percentile)))
+
+    # Degenerate case: almost no spread between chosen percentiles
+    if (p_hi - p_lo) < eps:
+        out = np.full_like(m, (low + high) * 0.5, dtype=np.float32)
+    else:
+        norm = (m - p_lo) / (p_hi - p_lo)
+        out = low + norm * (high - low)
+        if clip:
+            if low <= high:
+                out = np.clip(out, low, high)
+            else:
+                # inverted ranges
+                out = np.clip(out, high, low)
+
+    out = out.astype(dtype, copy=False)
+
+    return out
+
 def combine_masks(
     masks: Sequence[npt.NDArray],
     weights: Optional[Sequence[float]] = None,
