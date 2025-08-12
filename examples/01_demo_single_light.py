@@ -8,7 +8,7 @@ PATH_IN  = "examples/data/speckle.png"
 PATH_OUT = "examples/out/speckle-01-demo.png"
 PATH_MASK = "examples/out/speckle-01-mask_u8.png"
 
-# --- arbitrary light params (tweak these) ---
+# --- light params ---
 PEAK        = 160.0      # center brightness to add
 CORE_RADIUS = 12.0       # flat core radius (px)
 HALF_LIFE   = 80.0       # distance beyond core where intensity halves

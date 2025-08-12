@@ -75,7 +75,7 @@ def light_to_mask(
 
     return I.astype(dtype, copy=False)
 
-def add_masks(
+def combine_masks(
     masks: Sequence[npt.NDArray],
     weights: Optional[Sequence[float]] = None,
     dtype = np.float32,
