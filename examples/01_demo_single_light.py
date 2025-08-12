@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from PIL import Image
-from illumimod.masks import light_to_mask
+from illumimod.masks import generate_light as light_to_mask
 
 # --- hardcoded I/O ---
 PATH_IN  = "examples/data/speckle.png"

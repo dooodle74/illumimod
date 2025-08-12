@@ -1,5 +1,5 @@
 import numpy as np
-from illumimod.apply import apply_additive
+from illumimod.masks import apply as apply_additive
 
 def test_apply_additive_center_brightens():
     H = W = 64

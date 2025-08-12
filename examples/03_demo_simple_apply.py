@@ -4,8 +4,7 @@ import numpy as np
 from PIL import Image
 
 # If your function is named radial_light_mask, change the import accordingly:
-from illumimod.masks import light_to_mask as light_mask, combine_masks
-from illumimod.apply import apply_additive
+from illumimod.masks import generate_light as light_mask, combine as combine_masks, apply as apply_additive
 
 PATH_IN  = "examples/data/speckle.png"
 OUT_DIR   = "examples/out"

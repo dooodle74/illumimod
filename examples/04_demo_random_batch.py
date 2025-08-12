@@ -4,8 +4,7 @@ from PIL import Image
 import random
 import math
 
-from illumimod.masks import light_to_mask, combine_masks
-from illumimod.apply import apply_additive
+from illumimod.masks import generate_light as light_to_mask, combine as combine_masks, apply as apply_additive, autocap
 from illumimod.sampling import sample_pixel_index as sample_point
 
 PATH_IN  = "examples/data/speckle.png"
@@ -25,8 +24,8 @@ HALFLIFE_MAX = 125
 HALFLIFE_MIN = 40
 POWER_MAX = 25
 POWER_MIN = 10
-EXPOSURE_MIN = 7
-EXPOSURE_MAX = 13
+EXPOSURE_MIN = 8 # 0.8
+EXPOSURE_MAX = 12 # 1.2
 
 img = np.array(Image.open(PATH_IN).convert("RGB"))
 
@@ -48,7 +47,12 @@ for i in range(100, 200):
             )
         )
     # build masks and combine additively
-    masks = [light_to_mask(W, H, dtype=np.float32, **ld) for ld in lights]
+    masks = []
+    for ld in lights:
+        mask = light_to_mask(W, H, dtype=np.float32, **ld)
+        mask = autocap(mask, high=180)
+        masks.append(mask)
+
     L = combine_masks(masks)  # purely additive sum, no normalization
 
     PATH_MASK = os.path.join(OUT_DIR, f"mask-{i}.png")

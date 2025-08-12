@@ -3,7 +3,7 @@ from typing import Tuple, Optional, Sequence
 import numpy as np
 import numpy.typing as npt
 
-def light_to_mask(
+def generate_light(
     width: int,
     height: int,
     center: Tuple[float, float],
@@ -75,48 +75,7 @@ def light_to_mask(
 
     return I.astype(dtype, copy=False)
 
-def scale_mask(
-    mask: npt.NDArray,
-    low: float,
-    high: float,
-    low_percentile: float = 1.0,
-    high_percentile: float = 99.0,
-    *,
-    clip: bool = True,
-    dtype = np.float32,
-    eps: float = 1e-6,
-) -> npt.NDArray:
-    """
-    Linearly scale a mask so that:
-      P_low(mask)  -> low
-      P_high(mask) -> high
-    Everything below/above is optionally clipped.
-
-    Example: scale_mask(L, 0.0, 1.0)  # robust normalize to [0,1]
-    """
-    m = mask.astype(np.float32, copy=False)
-
-    p_lo = float(np.percentile(m, float(low_percentile)))
-    p_hi = float(np.percentile(m, float(high_percentile)))
-
-    # Degenerate case: almost no spread between chosen percentiles
-    if (p_hi - p_lo) < eps:
-        out = np.full_like(m, (low + high) * 0.5, dtype=np.float32)
-    else:
-        norm = (m - p_lo) / (p_hi - p_lo)
-        out = low + norm * (high - low)
-        if clip:
-            if low <= high:
-                out = np.clip(out, low, high)
-            else:
-                # inverted ranges
-                out = np.clip(out, high, low)
-
-    out = out.astype(dtype, copy=False)
-
-    return out
-
-def combine_masks(
+def combine(
     masks: Sequence[npt.NDArray],
     weights: Optional[Sequence[float]] = None,
     dtype = np.float32,
@@ -162,3 +121,142 @@ def combine_masks(
             out += float(w) * m.astype(dtype, copy=False)
 
     return out
+
+def scale(
+    mask: npt.NDArray,
+    low: Optional[float] = None,            # default: use p1 of the mask
+    high: Optional[float] = None,           # default: use p99 of the mask
+    low_percentile: float = 1.0,
+    high_percentile: float = 99.0,
+    *,
+    clip: bool = False,                     # default False so identity holds when low/high are None
+    dtype = np.float32,
+    eps: float = 1e-6,
+    return_stats: bool = False,
+) -> npt.NDArray:
+    """
+    Linearly map the interval [P_low(mask), P_high(mask)] -> [low, high].
+    - If low/high are None, they default to those same percentiles,
+      making the transform an identity (no change).
+    - Set clip=True to clamp everything outside [low, high] after mapping.
+    """
+    m = mask.astype(np.float32, copy=False)
+    p_lo = float(np.percentile(m, float(low_percentile)))
+    p_hi = float(np.percentile(m, float(high_percentile)))
+
+    lo_t = p_lo if low  is None else float(low)
+    hi_t = p_hi if high is None else float(high)
+
+    span = p_hi - p_lo
+    if abs(span) < eps:
+        # Nearly constant input in the selected band.
+        out = np.full_like(m, (lo_t + hi_t) * 0.5, dtype=np.float32)
+    else:
+        norm = (m - p_lo) / span
+        out  = lo_t + norm * (hi_t - lo_t)
+        if clip:
+            lo_c, hi_c = (lo_t, hi_t) if lo_t <= hi_t else (hi_t, lo_t)
+            out = np.clip(out, lo_c, hi_c)
+
+    out = out.astype(dtype, copy=False)
+    return out
+
+def autocap(
+    mask: npt.NDArray,
+    low: Optional[float] = None,            # lower bound to enforce (e.g., 0.0); None = ignore
+    high: Optional[float] = None,           # upper bound to enforce (e.g., 255.0); None = ignore
+    *,
+    low_percentile: float = 1.0,            # anchors for “original low/high”
+    high_percentile: float = 99.0,
+    clip: bool = True,                      # clamp to [low, high] when rescaling
+    dtype = np.float32,
+    eps: float = 1e-6,
+) -> npt.NDArray:
+    """
+    Auto-fit a mask to optional [low, high] bounds using linear scaling
+    with robust anchors. No-op unless a bound is out of range.
+
+    Behavior:
+      - If both bounds are violated → scale(low, high)
+      - If only high is violated   → scale(original_low, high)
+      - If only low is violated    → scale(low, original_high)
+      - If neither is violated or both bounds are None → return unchanged
+
+    “original_low/high” are the mask’s P_low / P_high percentiles (defaults 1/99).
+    """
+    m = mask.astype(np.float32, copy=False)
+    if m.size == 0 or (low is None and high is None):
+        return m.astype(dtype, copy=False)
+
+    # Robust anchors from the current mask
+    p_lo = float(np.percentile(m, float(low_percentile)))
+    p_hi = float(np.percentile(m, float(high_percentile)))
+
+    # Which bounds are actually out of range (robustly)?
+    low_out  = (low  is not None) and (p_lo < float(low)  - eps)
+    high_out = (high is not None) and (p_hi > float(high) + eps)
+
+    if not (low_out or high_out):
+        # Already within requested bounds → no change
+        return m.astype(dtype, copy=False)
+
+    # Decide target mapping
+    # Ignore type check - to get to these ifs low and high must not be None
+    if low_out and high_out:
+        # Fit both ends
+        return scale(
+            m,
+            low=float(low), high=float(high),
+            low_percentile=low_percentile, high_percentile=high_percentile,
+            clip=clip, dtype=dtype,
+        )
+    elif high_out:
+        # Preserve original low, fit high
+        return scale(
+            m,
+            low=p_lo, high=float(high),
+            low_percentile=low_percentile, high_percentile=high_percentile,
+            clip=clip, dtype=dtype,
+        )
+    else:  # low_out only
+        return scale(
+            m,
+            low=float(low), high=p_hi,
+            low_percentile=low_percentile, high_percentile=high_percentile,
+            clip=clip, dtype=dtype,
+        )
+
+def apply(
+    img: npt.NDArray,           # (H,W) or (H,W,3)
+    mask: npt.NDArray,          # (H,W), same spatial size as img
+    *,
+    exposure: float = 1.0,
+    clip: bool = True,
+    out_dtype = np.uint8,
+) -> npt.NDArray:
+    """
+    Add the mask to the image as-is (no auto-scaling), then clip.
+
+    Assumptions:
+      - mask is already in the correct units (e.g., 0..255 if img is uint8 sRGB).
+      - mask is non-negative (lights add). Negative values will darken.
+
+    Returns image after mask.
+    """
+    if img.shape[:2] != mask.shape[:2]:
+        raise ValueError("apply_additive: mask HxW must match image HxW")
+
+    img_f  = img.astype(np.float32, copy=False)
+    add    = mask.astype(np.float32, copy=False)
+
+    # Broadcast to RGB if needed
+    if img_f.ndim == 3 and img_f.shape[2] != 1 and add.ndim == 2:
+        add = add[..., None]
+
+    out = exposure * img_f + add
+
+    if clip:
+        headroom = 255.0 if np.issubdtype(img.dtype, np.integer) else 1.0
+        out = np.clip(out, 0.0, headroom)
+
+    return out.astype(out_dtype, copy=False)
