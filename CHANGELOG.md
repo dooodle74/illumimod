@@ -34,5 +34,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 - Python ≥ 3.9.
 - OpenCV is **optional**; core features are NumPy-only.
-- API is intentionally minimal; smart scaling and multiplicative/affine modes will come in later versions without breaking `apply_additive`.
+- API is intentionally minimal; smart scaling and multiplicative/affine modes will come in later versions without breaking current methods.
 
