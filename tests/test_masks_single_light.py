@@ -1,8 +1,7 @@
-# tests/test_masks_single_light.py
 import numpy as np
 import pytest
 
-from illumimod.masks import light_to_mask
+from illumimod.masks import generate_light as light_to_mask
 
 def test_core_peak_and_half_life_axis_aligned():
     W = H = 161
