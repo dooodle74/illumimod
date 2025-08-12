@@ -17,12 +17,17 @@ classifiers = [
   "Topic :: Multimedia :: Graphics",
   "Intended Audience :: Science/Research"
 ]
-
 dependencies = ["numpy>=1.23"]
 
 [project.optional-dependencies]
 opencv = ["opencv-python>=4.6"]
 dev = ["pytest", "ruff", "mypy", "build", "twine"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [project.urls]
 Homepage = "https://github.com/dooodle74/illumimod"
